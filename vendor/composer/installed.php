@@ -3,7 +3,7 @@
         'name' => 'ksfraser/ksf-marketing',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => 'a7e5ce537cff7a4a682819a86028c484b54be436',
+        'reference' => 'bcf77a816464a6d42afabaa716f75c159655f006',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -13,7 +13,7 @@
         'ksfraser/ksf-marketing' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => 'a7e5ce537cff7a4a682819a86028c484b54be436',
+            'reference' => 'bcf77a816464a6d42afabaa716f75c159655f006',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
