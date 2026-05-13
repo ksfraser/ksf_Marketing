@@ -19,14 +19,12 @@ class DripCampaign
 
     public function __construct(array $data = [])
     {
-        if (!empty($data)) {
-            $this->id = $data['id'] ?? 0;
-            $this->name = $data['name'];
-            $this->trigger = $data['trigger'];
-            $this->steps = json_decode($data['steps'] ?? '[]', true);
-            $this->status = $data['status'] ?? 'draft';
-            $this->created_at = $data['created_at'] ?? date('Y-m-d H:i:s');
-        }
+        $this->id = $data['id'] ?? 0;
+        $this->name = $data['name'] ?? '';
+        $this->trigger = $data['trigger'] ?? '';
+        $this->steps = json_decode($data['steps'] ?? '[]', true);
+        $this->status = $data['status'] ?? 'draft';
+        $this->created_at = $data['created_at'] ?? date('Y-m-d H:i:s');
     }
 
     public function addStep(array $step): void

@@ -253,16 +253,18 @@ class ABTest
 
     public function __construct(array $data = [])
     {
-        if (!empty($data)) {
-            $this->id = $data['id'] ?? 0;
-            $this->name = $data['name'];
-            $this->type = $data['type'];
-            $this->variants = json_decode($data['variants'] ?? '[]', true);
-            $this->results = json_decode($data['results'] ?? '{}', true);
-            $this->status = $data['status'] ?? 'draft';
-            $this->start_date = $data['start_date'];
-            $this->end_date = $data['end_date'] ?? null;
-        }
+        $this->id = $data['id'] ?? 0;
+        $this->name = $data['name'] ?? '';
+        $this->type = $data['type'] ?? '';
+        $this->variants = is_array($data['variants'] ?? null) 
+            ? $data['variants'] 
+            : json_decode($data['variants'] ?? '[]', true);
+        $this->results = is_array($data['results'] ?? null) 
+            ? $data['results'] 
+            : json_decode($data['results'] ?? '{}', true);
+        $this->status = $data['status'] ?? 'draft';
+        $this->start_date = $data['start_date'] ?? '';
+        $this->end_date = $data['end_date'] ?? null;
     }
 
     public function recordConversion(string $variant_id): void
