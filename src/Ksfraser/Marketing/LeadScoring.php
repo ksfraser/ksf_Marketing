@@ -4,6 +4,17 @@ namespace Ksfraser\Marketing;
 
 class LeadScoring
 {
+    private static ?bool $faAvailable = null;
+
+    private static function checkFaAvailable(): bool
+    {
+        if (self::$faAvailable !== null) {
+            return self::$faAvailable;
+        }
+        self::$faAvailable = function_exists('db_query') && defined('TB_PREF') && is_readable(__DIR__ . '/../../../includes/db.inc');
+        return self::$faAvailable;
+    }
+
     public int $contact_id;
     public int $score;
     public string $stage;
@@ -18,28 +29,33 @@ class LeadScoring
     public function __construct(int $contact_id)
     {
         $this->contact_id = $contact_id;
+        $this->score = 0;
+        $this->stage = self::STAGE_LEAD;
+        $this->points_breakdown = [];
         $this->load();
     }
 
-    private function load()
+    private function load(): void
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!self::checkFaAvailable()) {
+            return;
+        }
 
         $sql = "SELECT * FROM " . TB_PREF . "marketing_lead_scores 
             WHERE contact_id = " . db_escape($this->contact_id);
 
-        $result = db_query($sql);
-        $row = db_fetch_assoc($result);
-
+        $result = @db_query($sql);
+        if (!$result) {
+            return;
+        }
+        
+        $row = @db_fetch_assoc($result);
         if ($row) {
-            $this->score = (int)$row['score'];
-            $this->stage = $row['stage'];
-            $this->points_breakdown = json_decode($row['points_breakdown'] ?? '{}', true);
-        } else {
-            $this->score = 0;
-            $this->stage = self::STAGE_LEAD;
-            $this->points_breakdown = [];
+            $this->score = (int)($row['score'] ?? 0);
+            $this->stage = $row['stage'] ?? self::STAGE_LEAD;
+            $this->points_breakdown = is_string($row['points_breakdown'] ?? null) 
+                ? json_decode($row['points_breakdown'], true) ?? [] 
+                : ($row['points_breakdown'] ?? []);
         }
     }
 
@@ -58,19 +74,24 @@ class LeadScoring
 
     private function updateStage(): void
     {
-        $this->stage = match(true) {
-            $this->score >= 100 => self::STAGE_CUSTOMER,
-            $this->score >= 75 => self::STAGE_OPPORTUNITY,
-            $this->score >= 50 => self::STAGE_SQL,
-            $this->score >= 25 => self::STAGE_MQL,
-            default => self::STAGE_LEAD,
-        };
+        if ($this->score >= 100) {
+            $this->stage = self::STAGE_CUSTOMER;
+        } elseif ($this->score >= 75) {
+            $this->stage = self::STAGE_OPPORTUNITY;
+        } elseif ($this->score >= 50) {
+            $this->stage = self::STAGE_SQL;
+        } elseif ($this->score >= 25) {
+            $this->stage = self::STAGE_MQL;
+        } else {
+            $this->stage = self::STAGE_LEAD;
+        }
     }
 
     private function save(): void
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!self::checkFaAvailable()) {
+            return;
+        }
 
         $sql = "INSERT INTO " . TB_PREF . "marketing_lead_scores
             (contact_id, score, stage, points_breakdown, updated_at)
@@ -87,7 +108,7 @@ class LeadScoring
                 points_breakdown = " . db_escape(json_encode($this->points_breakdown)) . ",
                 updated_at = NOW()";
 
-        db_query($sql);
+        @db_query($sql);
     }
 
     public function getRecommendations(): array
@@ -101,13 +122,17 @@ class LeadScoring
 
     private function getNextActions(): array
     {
-        return match($this->stage) {
-            self::STAGE_LEAD => ['Send welcome email', 'Add to nurture campaign'],
-            self::STAGE_MQL => ['Send product info', 'Schedule demo'],
-            self::STAGE_SQL => ['Send quote', 'Schedule meeting'],
-            self::STAGE_OPPORTUNITY => ['Send proposal', 'Follow up call'],
-            self::STAGE_CUSTOMER => ['Cross-sell', 'Request referral'],
-        };
+        if ($this->stage === self::STAGE_LEAD) {
+            return ['Send welcome email', 'Add to nurture campaign'];
+        } elseif ($this->stage === self::STAGE_MQL) {
+            return ['Send product info', 'Schedule demo'];
+        } elseif ($this->stage === self::STAGE_SQL) {
+            return ['Send quote', 'Schedule meeting'];
+        } elseif ($this->stage === self::STAGE_OPPORTUNITY) {
+            return ['Send proposal', 'Follow up call'];
+        } else {
+            return ['Cross-sell', 'Request referral'];
+        }
     }
 }
 
@@ -126,13 +151,17 @@ class MarketingForm
     {
         if (!empty($data)) {
             $this->id = $data['id'] ?? 0;
-            $this->name = $data['name'];
+            $this->name = $data['name'] ?? '';
             $this->html_content = $data['html_content'] ?? '';
             $this->css_content = $data['css_content'] ?? '';
-            $this->fields = json_decode($data['fields'] ?? '[]', true);
+            $this->fields = is_string($data['fields'] ?? null) 
+                ? json_decode($data['fields'], true) ?? [] 
+                : ($data['fields'] ?? []);
             $this->submit_action = $data['submit_action'] ?? 'api';
             $this->submit_url = $data['submit_url'] ?? '';
-            $this->options = json_decode($data['options'] ?? '{}', true);
+            $this->options = is_string($data['options'] ?? null) 
+                ? json_decode($data['options'], true) ?? [] 
+                : ($data['options'] ?? []);
         }
     }
 
@@ -141,30 +170,30 @@ class MarketingForm
         $html = '<form class="ksf-marketing-form" data-form-id="' . $this->id . '">';
         
         foreach ($this->fields as $field) {
-            $required = $field['required'] ? 'required' : '';
-            $label = $field['label'] ?? $field['name'];
+            $required = $field['required'] ?? false ? 'required' : '';
+            $label = $field['label'] ?? $field['name'] ?? '';
             $type = $field['type'] ?? 'text';
             
             $html .= '<div class="form-group">';
             $html .= '<label>' . htmlspecialchars($label) . '</label>';
             
             if ($type === 'select') {
-                $html .= '<select name="' . $field['name'] . '" ' . $required . '>';
+                $html .= '<select name="' . ($field['name'] ?? '') . '" ' . $required . '>';
                 $html .= '<option value="">Select...</option>';
                 foreach ($field['options'] ?? [] as $opt) {
-                    $html .= '<option value="' . $opt . '">' . $opt . '</option>';
+                    $html .= '<option value="' . htmlspecialchars($opt) . '">' . htmlspecialchars($opt) . '</option>';
                 }
                 $html .= '</select>';
             } elseif ($type === 'textarea') {
-                $html .= '<textarea name="' . $field['name'] . '" ' . $required . '></textarea>';
+                $html .= '<textarea name="' . ($field['name'] ?? '') . '" ' . $required . '></textarea>';
             } else {
-                $html .= '<input type="' . $type . '" name="' . $field['name'] . '" ' . $required . '>';
+                $html .= '<input type="' . htmlspecialchars($type) . '" name="' . ($field['name'] ?? '') . '" ' . $required . '>';
             }
             
             $html .= '</div>';
         }
         
-        $html .= '<button type="submit">' . ($this->options['submit_text'] ?? 'Submit') . '</button>';
+        $html .= '<button type="submit">' . htmlspecialchars($this->options['submit_text'] ?? 'Submit') . '</button>';
         $html .= '</form>';
         
         if ($this->css_content) {
@@ -176,12 +205,17 @@ class MarketingForm
 
     public function processSubmission(array $data): array
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!function_exists('db_query') || !defined('TB_PREF')) {
+            return [
+                'success' => false,
+                'contact_id' => 0,
+                'message' => 'Database not available',
+            ];
+        }
 
         $contact_data = [
-            'name' => $data['name'] ?? $data['first_name'] . ' ' . ($data['last_name'] ?? ''),
-            'email' => $data['email'],
+            'name' => $data['name'] ?? (($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')),
+            'email' => $data['email'] ?? '',
             'phone' => $data['phone'] ?? '',
             'company' => $data['company'] ?? '',
             'source' => 'form_' . $this->id,
@@ -192,9 +226,9 @@ class MarketingForm
         $vals = implode(', ', array_map(fn($v) => db_escape($v), array_values($contact_data)));
         
         $sql = "INSERT INTO " . TB_PREF . "marketing_contacts ($cols) VALUES ($vals)";
-        db_query($sql);
+        @db_query($sql);
         
-        $contact_id = db_insert_id();
+        $contact_id = function_exists('db_insert_id') ? db_insert_id() : 0;
 
         $lead = new LeadScoring($contact_id);
         $lead->addPoints('form_submission', 10);
@@ -208,26 +242,34 @@ class MarketingForm
 
     public static function find(int $id): ?self
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!function_exists('db_query') || !defined('TB_PREF')) {
+            return null;
+        }
 
         $sql = "SELECT * FROM " . TB_PREF . "marketing_forms WHERE id = " . db_escape($id);
-        $result = db_query($sql);
-        $row = db_fetch_assoc($result);
+        $result = @db_query($sql);
+        if (!$result) {
+            return null;
+        }
+        $row = @db_fetch_assoc($result);
 
         return $row ? new self($row) : null;
     }
 
     public static function all(): array
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!function_exists('db_query') || !defined('TB_PREF')) {
+            return [];
+        }
 
         $sql = "SELECT * FROM " . TB_PREF . "marketing_forms ORDER BY name";
-        $result = db_query($sql);
+        $result = @db_query($sql);
+        if (!$result) {
+            return [];
+        }
+        
         $forms = [];
-
-        while ($row = db_fetch_assoc($result)) {
+        while ($row = @db_fetch_assoc($result)) {
             $forms[] = new self($row);
         }
 
@@ -307,13 +349,14 @@ class ABTest
 
     private function saveResults(): void
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!function_exists('db_query') || !defined('TB_PREF')) {
+            return;
+        }
 
         $sql = "UPDATE " . TB_PREF . "marketing_ab_tests
             SET results = " . db_escape(json_encode($this->results)) . "
             WHERE id = " . db_escape($this->id);
 
-        db_query($sql);
+        @db_query($sql);
     }
 }

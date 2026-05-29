@@ -12,7 +12,7 @@ function db_query(string $sql) {
     return true;
 }
 
-function db_fetch_assoc($result) {
+function db_fetch_assoc($result): ?array {
     return null;
 }
 
@@ -28,6 +28,6 @@ function db_insert_id() {
     return 1;
 }
 
-function get_option(string $name, mixed $default = ''): mixed {
+function get_option(string $name, $default = '') {
     return $default;
 }

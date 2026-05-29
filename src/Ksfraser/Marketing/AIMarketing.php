@@ -171,7 +171,7 @@ class SocialMediaPublisher
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Authorization: Bearer ' . $this->credentials['linkedin_access_token'],
-            'Content-Type: application/json',
+            'Content-Type: => application/json',
         ]);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post));
 
@@ -183,8 +183,14 @@ class SocialMediaPublisher
 
     public function schedulePost(string $content, string $schedule_time, string $platform): array
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!function_exists('db_query')) {
+            return [
+                'id' => 0,
+                'scheduled_for' => $schedule_time,
+                'status' => 'unavailable',
+                'message' => 'Database not available'
+            ];
+        }
 
         $id = db_insert(TB_PREF . 'marketing_scheduled_posts');
         
@@ -199,7 +205,7 @@ class SocialMediaPublisher
                 NOW()
             )";
 
-        db_query($sql);
+        @db_query($sql);
 
         return ['id' => $id, 'scheduled_for' => $schedule_time];
     }
@@ -207,6 +213,17 @@ class SocialMediaPublisher
 
 class MarketingCampaign
 {
+    private static ?bool $faAvailable = null;
+
+    private static function checkFaAvailable(): bool
+    {
+        if (self::$faAvailable !== null) {
+            return self::$faAvailable;
+        }
+        self::$faAvailable = function_exists('db_query') && defined('TB_PREF') && is_readable(__DIR__ . '/../../../includes/db.inc');
+        return self::$faAvailable;
+    }
+
     public int $id;
     public string $name;
     public string $type;
@@ -221,13 +238,16 @@ class MarketingCampaign
     {
         if (!empty($data)) {
             $this->id = $data['id'] ?? 0;
-            $this->name = $data['name'];
-            $this->type = $data['type'];
+            $this->name = $data['name'] ?? '';
+            $this->type = $data['type'] ?? '';
             $this->status = $data['status'] ?? 'draft';
-            $this->channels = json_decode($data['channels'] ?? '[]', true);
+            $channelsData = $data['channels'] ?? null;
+            $this->channels = is_array($channelsData) 
+                ? $channelsData 
+                : (is_string($channelsData) ? json_decode($channelsData, true) ?? [] : []);
             $this->leads_generated = $data['leads_generated'] ?? 0;
             $this->conversion_rate = $data['conversion_rate'] ?? 0;
-            $this->start_date = $data['start_date'];
+            $this->start_date = $data['start_date'] ?? '';
             $this->end_date = $data['end_date'] ?? null;
         }
     }
@@ -240,17 +260,21 @@ class MarketingCampaign
 
     public static function getActive(): array
     {
-        global $db;
-        include_once '../../../includes/db.inc';
+        if (!self::checkFaAvailable()) {
+            return [];
+        }
 
         $sql = "SELECT * FROM " . TB_PREF . "marketing_campaigns 
             WHERE status = 'active'
             AND (end_date IS NULL OR end_date >= CURDATE())";
 
-        $result = db_query($sql);
-        $campaigns = [];
+        $result = @db_query($sql);
+        if (!$result) {
+            return [];
+        }
 
-        while ($row = db_fetch_assoc($result)) {
+        $campaigns = [];
+        while ($row = @db_fetch_assoc($result)) {
             $campaigns[] = new self($row);
         }
 

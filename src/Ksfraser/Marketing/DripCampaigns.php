@@ -4,6 +4,17 @@ namespace Ksfraser\Marketing;
 
 class DripCampaign
 {
+    private static ?bool $faAvailable = null;
+
+    private static function checkFaAvailable(): bool
+    {
+        if (self::$faAvailable !== null) {
+            return self::$faAvailable;
+        }
+        self::$faAvailable = function_exists('db_query') && defined('TB_PREF') && is_readable(__DIR__ . '/../../../includes/db.inc');
+        return self::$faAvailable;
+    }
+
     public int $id;
     public string $name;
     public string $trigger;
@@ -41,7 +52,9 @@ class DripCampaign
             
             $scheduled = date('Y-m-d H:i:s', strtotime("+{$delay} days"));
             
-            $this->scheduleEmail($contact_id, $step, $scheduled);
+            if (self::checkFaAvailable()) {
+                $this->scheduleEmail($contact_id, $step, $scheduled);
+            }
             $sent[] = $step['name'];
         }
         
@@ -50,6 +63,9 @@ class DripCampaign
 
     private function scheduleEmail(int $contact_id, array $step, string $scheduled): void
     {
+        if (!self::checkFaAvailable()) {
+            return;
+        }
         global $db;
         include_once '../../../includes/db.inc';
 
@@ -70,6 +86,9 @@ class DripCampaign
 
     public static function find(int $id): ?self
     {
+        if (!self::checkFaAvailable()) {
+            return null;
+        }
         global $db;
         include_once '../../../includes/db.inc';
 
@@ -82,6 +101,9 @@ class DripCampaign
 
     public static function findByTrigger(string $trigger): array
     {
+        if (!self::checkFaAvailable()) {
+            return [];
+        }
         global $db;
         include_once '../../../includes/db.inc';
 
@@ -101,8 +123,22 @@ class DripCampaign
 
 class DripEmailSender
 {
+    private static ?bool $faAvailable = null;
+
+    private static function checkFaAvailable(): bool
+    {
+        if (self::$faAvailable !== null) {
+            return self::$faAvailable;
+        }
+        self::$faAvailable = function_exists('db_query') && defined('TB_PREF') && is_readable(__DIR__ . '/../../../includes/db.inc');
+        return self::$faAvailable;
+    }
+
     public static function processQueue(): int
     {
+        if (!self::checkFaAvailable()) {
+            return 0;
+        }
         global $db;
         include_once '../../../includes/db.inc';
 
@@ -134,6 +170,9 @@ class DripEmailSender
 
     private static function sendEmail(int $contact_id, string $subject, string $body): bool
     {
+        if (!self::checkFaAvailable()) {
+            return false;
+        }
         global $db;
         include_once '../../../includes/db.inc';
 
