@@ -137,7 +137,7 @@ class DripEmailSender
         global $db;
         include_once '../../../includes/db.inc';
 
-        $sql = "SELECT email FROM " . TB_PREF . "marketing_contacts 
+        $sql = "SELECT email FROM " . TB_PREF . "ksf_marketing_contacts 
             WHERE id = " . db_escape($contact_id);
 
         $result = db_query($sql);

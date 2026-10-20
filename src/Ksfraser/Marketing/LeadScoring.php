@@ -26,7 +26,7 @@ class LeadScoring
         global $db;
         include_once '../../../includes/db.inc';
 
-        $sql = "SELECT * FROM " . TB_PREF . "marketing_lead_scores 
+        $sql = "SELECT * FROM " . TB_PREF . "ksf_marketing_lead_scores 
             WHERE contact_id = " . db_escape($this->contact_id);
 
         $result = db_query($sql);
@@ -58,13 +58,18 @@ class LeadScoring
 
     private function updateStage(): void
     {
-        $this->stage = match(true) {
-            $this->score >= 100 => self::STAGE_CUSTOMER,
-            $this->score >= 75 => self::STAGE_OPPORTUNITY,
-            $this->score >= 50 => self::STAGE_SQL,
-            $this->score >= 25 => self::STAGE_MQL,
-            default => self::STAGE_LEAD,
-        };
+        // PHP 7.4 compatible: the runtime is PHP 7.4.33 and match() is PHP 8.
+        if ($this->score >= 100) {
+            $this->stage = self::STAGE_CUSTOMER;
+        } elseif ($this->score >= 75) {
+            $this->stage = self::STAGE_OPPORTUNITY;
+        } elseif ($this->score >= 50) {
+            $this->stage = self::STAGE_SQL;
+        } elseif ($this->score >= 25) {
+            $this->stage = self::STAGE_MQL;
+        } else {
+            $this->stage = self::STAGE_LEAD;
+        }
     }
 
     private function save(): void
@@ -72,7 +77,7 @@ class LeadScoring
         global $db;
         include_once '../../../includes/db.inc';
 
-        $sql = "INSERT INTO " . TB_PREF . "marketing_lead_scores
+        $sql = "INSERT INTO " . TB_PREF . "ksf_marketing_lead_scores
             (contact_id, score, stage, points_breakdown, updated_at)
             VALUES (
                 " . db_escape($this->contact_id) . ",
@@ -101,13 +106,20 @@ class LeadScoring
 
     private function getNextActions(): array
     {
-        return match($this->stage) {
-            self::STAGE_LEAD => ['Send welcome email', 'Add to nurture campaign'],
-            self::STAGE_MQL => ['Send product info', 'Schedule demo'],
-            self::STAGE_SQL => ['Send quote', 'Schedule meeting'],
-            self::STAGE_OPPORTUNITY => ['Send proposal', 'Follow up call'],
-            self::STAGE_CUSTOMER => ['Cross-sell', 'Request referral'],
-        };
+        // PHP 7.4 compatible: the runtime is PHP 7.4.33 and match() is PHP 8.
+        switch ($this->stage) {
+            case self::STAGE_MQL:
+                return ['Send product info', 'Schedule demo'];
+            case self::STAGE_SQL:
+                return ['Send quote', 'Schedule meeting'];
+            case self::STAGE_OPPORTUNITY:
+                return ['Send proposal', 'Follow up call'];
+            case self::STAGE_CUSTOMER:
+                return ['Cross-sell', 'Request referral'];
+            case self::STAGE_LEAD:
+            default:
+                return ['Send welcome email', 'Add to nurture campaign'];
+        }
     }
 }
 
@@ -191,7 +203,7 @@ class MarketingForm
         $cols = implode(', ', array_keys($contact_data));
         $vals = implode(', ', array_map(fn($v) => db_escape($v), array_values($contact_data)));
         
-        $sql = "INSERT INTO " . TB_PREF . "marketing_contacts ($cols) VALUES ($vals)";
+        $sql = "INSERT INTO " . TB_PREF . "ksf_marketing_contacts ($cols) VALUES ($vals)";
         db_query($sql);
         
         $contact_id = db_insert_id();
